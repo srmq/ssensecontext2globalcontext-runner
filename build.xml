@@ -207,6 +207,16 @@
             dest="${maven3.zip.file}" usetimestamp="true"/>
         </target>
         
+        <target name="buildCMRDCA" depends="shell_windows_setup, shell_unix_setup, clone-repos" unless="skip.build.cmrdca">
+            <property name="make.binary" value="make" />
+            <exec dir="${basedir}/cmrdca/CMRDCA/src" executable="${shell.executable}">
+                <arg line="${shell.args} '${make.binary}'" />
+            </exec>
+            <exec dir="${basedir}/cmrdca/CMRDCA-SFProcessor/src" executable="${shell.executable}">
+                <arg line="${shell.args} '${make.binary}'" />
+            </exec>
+        </target>
+        
         <!--
             Exemplo:
                 ant globalContext2DissimMatrix -Dr.context.inputfile=./20_newsgroups-noheaders-Glove-SSenseContextMatrix.txt -Dr.dissims.outputfile=./20_newsgroups-noheaders-Glove-SSenseContext-Dissims.mtx
