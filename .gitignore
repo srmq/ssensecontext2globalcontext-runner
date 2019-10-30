@@ -2,3 +2,7 @@ downloads/
 ivy/
 nlp/
 tools/
+cmrdca/
+*.Rout
+*.txt
+*.mtx

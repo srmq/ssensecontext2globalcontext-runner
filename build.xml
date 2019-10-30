@@ -18,7 +18,10 @@
     </condition>
 
     <condition property="skip.clone.repos">
-        <available file="${basedir}/nlp/.git" type="dir" />
+        <and>
+            <available file="${basedir}/nlp/.git" type="dir" />
+            <available file="${basedir}/cmrdca/.git" type="dir" />
+        </and>
     </condition>
     
     <condition property="skip.nlp.package">
@@ -115,6 +118,45 @@
         
         <target name="clean-repos">
                 <delete dir="nlp" />
+                <delete dir="cmrdca" />
+        </target>
+        
+        <!-- Exemplo:
+            ant dissimMtxElements2SimpleFormat -DinputFile.dissimMatrix=20_newsgroups-noheaders-Glove-SSenseContext-Dissims.mtx.bak -DinputFile.elementList=20_newsgroups-noheaders-Glove-SSenseContextMatrix-Elements.txt -DoutputFile.simpleFormat=20_newsgroups-noheaders-Glove-SSenseContext-Dissims-SimpleFormat.txt 
+        -->
+        <target name="dissimMtxElements2SimpleFormat" depends="gen-ivy-settings">
+            <condition property="inputFile.dissimMatrix.set">
+                <isset property="inputFile.dissimMatrix" />
+            </condition>
+            
+            <condition property="inputFile.elementList.set">
+                <isset property="inputFile.elementList" />
+            </condition>
+
+            <condition property="outputFile.simpleFormat.set">
+                <isset property="outputFile.simpleFormat" />
+            </condition>
+            
+            <fail message="input file with dissim matrix is not set." unless="inputFile.dissimMatrix.set" />
+
+            <fail message="input file with element list is not set." unless="inputFile.elementList.set" />
+
+            <fail message="output file for simple format output is not set." unless="outputFile.simpleFormat.set" />
+            
+            <ivy:settings file="${ivy.conf.dir}/ivysettings.xml"/>
+            <ivy:resolve resolveId="wrdca-jars" keep="true">
+                <dependency org="br.ufpe.cin.cluster" name="srmq-wrdca" rev="0.0.1-SNAPSHOT" transitive="false" />
+            </ivy:resolve>
+            <java classname="wrdca.util.MMObjectListToSimpleFormat" fork="true" maxmemory="2048m">
+                <arg value="${inputFile.dissimMatrix}" />
+                <arg value="${inputFile.elementList}" />
+                <arg value="${outputFile.simpleFormat}" />
+                <arg value="usefloats" />
+                <classpath>
+                    <ivy:resources resolveId="wrdca-jars" />
+                    <pathelement path="${java.class.path}"/>
+                </classpath>
+            </java>
         </target>
         
 
@@ -131,6 +173,9 @@
 
                 <git:git directory="nlp" verbose="true">
                         <git:clone uri="https://github.com/srmq/nlp.git"/>
+                </git:git>
+                <git:git directory="cmrdca" verbose="true">
+                        <git:clone uri="https://github.com/srmq/cmrdca.git"/>
                 </git:git>
         </target>
         
@@ -161,6 +206,34 @@
                 <get src="https://archive.apache.org/dist/maven/maven-3/${maven3.install.version}/binaries/apache-maven-${maven3.install.version}-bin.zip"
             dest="${maven3.zip.file}" usetimestamp="true"/>
         </target>
+        
+        <!--
+            Exemplo:
+                ant globalContext2DissimMatrix -Dr.context.inputfile=./20_newsgroups-noheaders-Glove-SSenseContextMatrix.txt -Dr.dissims.outputfile=./20_newsgroups-noheaders-Glove-SSenseContext-Dissims.mtx
+        -->
+        <target name="globalContext2DissimMatrix" depends="shell_windows_setup, shell_unix_setup">
+            <property name="r.binary" value="R" />
+            <property name="r.script" value="${basedir}/globalcontext2dissims.R" />
+            
+            <condition property="r.context.inputfile.set">
+                <isset property="r.context.inputfile" />
+            </condition>
+
+            <condition property="r.dissims.outputfile.set">
+                <isset property="r.dissims.outputfile" />
+            </condition>
+            
+            <fail message="input file with context matrix is not set." unless="r.context.inputfile.set" />
+            
+            <fail message="output file to write output dissim matrix is not set." unless="r.dissims.outputfile.set" />
+            
+            <exec dir="${basedir}" executable="${shell.executable}">
+                <env key="R_CONTEXT_INPUT" value="${r.context.inputfile}"/>
+                <env key="R_DISSIMS_OUTPUT" value="${r.dissims.outputfile}"/>
+                <arg line="${shell.args} '${r.binary} CMD BATCH --no-save --no-restore ${r.script}'" />
+            </exec>
+        </target>
+        
         <!--
             Exemplo: 
                 ant run-ssenses2globalcontext -Dssensescontext.docs.basepath=/home/srmq/git/wordvec-ssensecontext-runner/output/20newsgroups -Dssensescontext.matrix.outfile=./20_newsgroups-noheaders-Glove-SSenseContextMatrix.txt -Dssensescontext.elements.outfile=./20_newsgroups-noheaders-Glove-SSenseContextMatrix-Elements.txt -Dssensescontext.embedsize=300
