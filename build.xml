@@ -120,6 +120,59 @@
                 <delete dir="nlp" />
                 <delete dir="cmrdca" />
         </target>
+
+        <!-- Exemplo:
+            ant gen20newsgroupsConfusionImages -Dr.clusterTable.inputfile=clusterrun-20newsgroups-glove-SSenseContextMatrix-k20-RTable.txt -Dr.confusionImage.outputfile=clusterrun-20newsgroups-glove-SSenseContextMatrix-k20.pdf
+        -->
+        <target name="gen20newsgroupsConfusionImages" depends="shell_windows_setup, shell_unix_setup">
+            <property name="r.binary" value="R" />
+            <property name="r.script" value="${basedir}/genConfusionMatImages20news.R" />
+            
+            <condition property="r.clusterTable.inputfile.set">
+                <isset property="r.clusterTable.inputfile" />
+            </condition>
+
+            <condition property="r.confusionImage.outputfile.set">
+                <isset property="r.confusionImage.outputfile" />
+            </condition>
+            
+            <fail message="input file with cluster table is not set." unless="r.clusterTable.inputfile.set" />
+            
+            <fail message="output file to write confusion matrix image is not set." unless="r.confusionImage.outputfile.set" />
+            
+            <exec dir="${basedir}" executable="${shell.executable}">
+                <env key="RTABLE_FILE" value="${r.clusterTable.inputfile}"/>
+                <env key="RPDFOUT_FILE" value="${r.confusionImage.outputfile}"/>
+                <arg line="${shell.args} '${r.binary} CMD BATCH --no-save --no-restore ${r.script}'" />
+            </exec>
+        </target>
+        
+
+        <!-- Exemplo:
+            ant processedOutputClustering2Table -DinputFile.processedOutput=clusterrun-20newsgroups-glove-SSenseContextMatrix-k20.txt -DoutputFile.clusterTable=clusterrun-20newsgroups-glove-SSenseContextMatrix-k20-RTable.txt
+        -->
+        <target name="processedOutputClustering2Table" depends="gen-ivy-settings">
+            <condition property="inputFile.processedOutput.set">
+                <isset property="inputFile.processedOutput" />
+            </condition>
+            <condition property="outputFile.clusterTable.set">
+                <isset property="outputFile.clusterTable" />
+            </condition>
+            <fail message="input file with clustering results not set." unless="inputFile.processedOutput.set" />
+            <fail message="output file to write cluster table not set." unless="outputFile.clusterTable.set" />
+            <ivy:settings file="${ivy.conf.dir}/ivysettings.xml"/>
+            <ivy:resolve resolveId="wrdca-jars" keep="true">
+                <dependency org="br.ufpe.cin.cluster" name="srmq-wrdca" rev="0.0.1-SNAPSHOT" transitive="false" />
+            </ivy:resolve>
+            <java classname="wrdca.util.ProcessedOutputToTableWriter" fork="true" output="${outputFile.clusterTable}" error="${basedir}/stderr.log">
+                <arg value="${inputFile.processedOutput}" />
+                <classpath>
+                    <ivy:resources resolveId="wrdca-jars" />
+                    <pathelement path="${java.class.path}"/>
+                </classpath>
+            </java>
+        </target>
+        
         
         <!-- Exemplo:
             ant dissimMtxElements2SimpleFormat -DinputFile.dissimMatrix=20_newsgroups-noheaders-Glove-SSenseContext-Dissims.mtx.bak -DinputFile.elementList=20_newsgroups-noheaders-Glove-SSenseContextMatrix-Elements.txt -DoutputFile.simpleFormat=20_newsgroups-noheaders-Glove-SSenseContext-Dissims-SimpleFormat.txt 
@@ -157,6 +210,155 @@
                     <pathelement path="${java.class.path}"/>
                 </classpath>
             </java>
+        </target>
+        
+        <target name="localCMRDCA" unless="mode.global.set" depends="shell_windows_setup, shell_unix_setup, buildCMRDCA">
+            <exec dir="${basedir}" executable="${shell.executable}">
+                <arg line="${shell.args} '${basedir}/cmrdca/CMRDCA-SFProcessor/src/CMRDCA-SFProcessor ${config.file}'" />
+            </exec>
+        </target>
+        
+        <target name="globalCMRDCA" if="mode.global.set" depends="shell_windows_setup, shell_unix_setup, buildCMRDCA">
+            <exec dir="${basedir}" executable="${shell.executable}">
+                <arg line="${shell.args} '${basedir}/cmrdca/CMRDCA-SFProcessor/src/CMRDCA-SFProcessor ${config.file} global'" />
+            </exec>
+        </target>
+        
+        <!-- Exemplo
+            ant runCMRDCA-multiK -Dn.clusters.from=2 -Dn.clusters.to=25 -Dn.init=20 -Dmax.iter=20 -Dinput.files=/home/srmq/Documents/Research/textmining/devel/data/20_newsgroups-noheaders-Glove-SSenseContextMatrix-Dissims-Norm0-1.txt -Doutput.files.startname=clusterrun-20newsgroups-glove-SSenseContextMatrix -Dn.objects=19997 -Dn.aprioriclass=20 -Doutput.file.indicestable=clusterrun-20newsgroups-glove-SSenseContextMatrix-indicestable.csv 
+        -->
+        <target name="runCMRDCA-multiK" depends="buildCMRDCA">
+            <condition property="n.clusters.from.set">
+                <isset property="n.clusters.from" />
+            </condition>
+            <condition property="n.clusters.to.set">
+                <isset property="n.clusters.to" />
+            </condition>
+            <condition property="output.files.startname.set">
+                <isset property="output.files.startname" />
+            </condition>
+            <condition property="output.file.indicestable.set">
+                <isset property="output.file.indicestable" />
+            </condition>
+            <property name="n.clusters.inc" value="1" />
+            <fail message="initial number of clusters is not set." unless="n.clusters.from.set" />
+            <fail message="final number of clusters is not set." unless="n.clusters.to.set" />
+            <fail message="start name for output files is not set." unless="output.files.startname.set" />
+            
+            <script language="javascript" manager="javax"><![CDATA[
+                myProject = self.getProject();
+                initK = parseInt(myProject.getProperty("n.clusters.from"));
+                endK = parseInt(myProject.getProperty("n.clusters.to"));
+                inc = parseInt(myProject.getProperty("n.clusters.inc"));
+                if (initK < 2) throw new Error("n.clusters.from should be at least 2, was: " + initK);
+                if (endK < initK) throw new Error("n.clusters.to should be equal or greater than n.clusters.from, was: " + endK);
+                if (inc < 1) throw new Error("n.clusters.inc should be at least 1, was: " + inc);
+                outputFileNames = "";
+                for (k = initK; k <= endK; k += inc) {
+                    currOutputFile = myProject.getProperty("output.files.startname") + "-k" + k + ".txt";
+                    myProject.setProperty("output.file",currOutputFile);
+                    myProject.setProperty("n.clusters", k.toString());
+                    myProject.executeTarget("runCMRDCA");
+                    if (outputFileNames.length > 0) {
+                        outputFileNames += "|";
+                    }
+                    outputFileNames += currOutputFile;
+                }
+                myProject.setProperty("output.files.list", outputFileNames);
+            ]]></script>
+        <!-- FIXME continue using property output.files.list with java pattern -->
+            
+        </target>
+        
+        <!-- Exemplo
+            ant runCMRDCA -Dn.clusters=20 -Dn.init=20 -Dmax.iter=20 -Dinput.files=/home/srmq/Documents/Research/textmining/devel/data/20_newsgroups-noheaders-Glove-SSenseContextMatrix-Dissims-Norm0-1.txt -Doutput.file=clusterrun.txt -Dn.objects=19997 -Dn.aprioriclass=20
+        -->
+        <target name="runCMRDCA" depends="buildCMRDCA">
+            <condition property="n.clusters.set">
+                <isset property="n.clusters" />
+            </condition>            
+            <condition property="n.init.set">
+                <isset property="n.init" />
+            </condition>            
+            <condition property="max.iter.set">
+                <isset property="max.iter" />
+            </condition>
+            <condition property="input.files.set">
+                <isset property="input.files" />
+            </condition>
+            <condition property="output.file.set">
+                <isset property="output.file" />
+            </condition>
+            <condition property="n.objects.set">
+                <isset property="n.objects" />
+            </condition>
+            <condition property="n.aprioriclass.set">
+                <isset property="n.aprioriclass" />
+            </condition>
+            <condition property="mode.global.set">
+                <isset property="mode.global" />
+            </condition>
+            <condition property="mode.local.set">
+                <not><isset property="mode.global" /></not>
+            </condition>
+            
+            <property name="config.file" value="${output.file}.config" />
+            <property name="n.medoids" value="2" />
+            <property name="single.precision" value="1" />
+            
+            <fail message="number of clusters desired is not set." unless="n.clusters.set" />
+            <fail message="number of initializations to use is not set." unless="n.init.set" />
+            <fail message="max number of iterations is not set." unless="max.iter.set" />
+            <fail message="input files are not set." unless="input.files.set" />
+            <fail message="output files are not set." unless="output.file.set" />
+            <fail message="number of objects to cluster is not set." unless="n.objects.set" />
+            <fail message="number of existing aprioriclass (for supervised indices calculation) is not set." unless="n.aprioriclass.set" />
+            
+            <loadresource property="input.files.filtered">
+                <propertyresource name="input.files" />
+                <filterchain>
+                    <tokenfilter>
+                        <filetokenizer />
+                        <replacestring from="," to="${line.separator}"/>
+                    </tokenfilter>
+                </filterchain>
+            </loadresource>
+            <echo file="${config.file}">(numCluster)
+${n.clusters}
+
+(numInicializacao)
+${n.init}
+
+(numIteracoes)
+${max.iter}
+
+(input)
+${input.files.filtered}
+
+(output)
+${output.file}
+
+(entradaSimples)
+1
+
+(numIndividuos)
+${n.objects}
+
+(numPrioriClusters)
+${n.aprioriclass}
+
+(numMedoids)
+${n.medoids}
+
+(useDissimFloats)
+${single.precision}
+</echo>
+        <antcall target="localCMRDCA">
+            <param name="config.file" value="${config.file}" />
+        </antcall>
+        <antcall target="globalCMRDCA">
+            <param name="config.file" value="${config.file}" />
+        </antcall>
         </target>
         
 

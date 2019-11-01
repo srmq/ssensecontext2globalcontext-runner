@@ -3,6 +3,11 @@ ivy/
 nlp/
 tools/
 cmrdca/
+build/
+src/
 *.Rout
 *.txt
 *.mtx
+*.config
+*.pdf
+stderr.log
